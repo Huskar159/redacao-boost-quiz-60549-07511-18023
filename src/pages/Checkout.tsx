@@ -12,7 +12,6 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -173,37 +172,44 @@ const Checkout = () => {
     setIsGeneratingPix(true);
     
     try {
-      const { data, error } = await supabase.functions.invoke('create-pix-payment', {
-        body: { email, amount: 19.90 },
+      // Cria pagamento PIX diretamente na API do Mercado Pago
+      const response = await mercadoPagoApi.post('/payments', {
+        transaction_amount: 19.90,
+        description: 'Acesso Redação Boost',
+        payment_method_id: 'pix',
+        payer: {
+          email,
+        },
       });
 
-      if (error) throw error;
+      const payment = response.data;
+      const qr = payment?.point_of_interaction?.transaction_data;
 
-      if (data.success) {
-        setPixData({
-          qr_code: data.qr_code,
-          qr_code_base64: data.qr_code_base64,
-          payment_id: data.payment_id,
-        });
-        setShowPixModal(true);
-        toast({
-          title: "PIX gerado com sucesso!",
-          description: "Escaneie o QR Code para realizar o pagamento",
-        });
-        
-        // Armazena o ID do pagamento no localStorage
-        localStorage.setItem('currentPaymentId', data.payment_id);
-        
-        // Inicia a verificação do pagamento
-        startPaymentVerification(data.payment_id);
-      } else {
-        throw new Error(data.error || "Erro ao gerar PIX");
+      if (!payment?.id || !qr?.qr_code || !qr?.qr_code_base64) {
+        throw new Error('Resposta inválida do Mercado Pago ao gerar PIX');
       }
-    } catch (error) {
+
+      setPixData({
+        qr_code: qr.qr_code,
+        qr_code_base64: qr.qr_code_base64,
+        payment_id: String(payment.id),
+      });
+      setShowPixModal(true);
+      toast({
+        title: "PIX gerado com sucesso!",
+        description: "Escaneie o QR Code para realizar o pagamento",
+      });
+      
+      // Armazena o ID do pagamento no localStorage
+      localStorage.setItem('currentPaymentId', String(payment.id));
+      
+      // Inicia a verificação do pagamento
+      startPaymentVerification(String(payment.id));
+    } catch (error: any) {
       console.error("Erro ao gerar PIX:", error);
       toast({
         title: "Erro ao gerar PIX",
-        description: error.message || "Tente novamente mais tarde",
+        description: error?.response?.data?.message || error?.message || "Tente novamente mais tarde",
         variant: "destructive",
       });
     } finally {
