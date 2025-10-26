@@ -1,5 +1,12 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+
+// Declaração de tipo para o Facebook Pixel
+declare global {
+  interface Window {
+    fbq: (event: string, eventName: string) => void;
+  }
+}
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -23,6 +30,13 @@ import {
 } from "lucide-react";
 
 const Checkout = () => {
+  // Meta Pixel - Initiate Checkout
+  useEffect(() => {
+    if (window.fbq) {
+      window.fbq('track', 'InitiateCheckout');
+    }
+  }, []);
+
   const [urgencyTimer, setUrgencyTimer] = useState(15 * 60); // 15 minutos em segundos
   const [email, setEmail] = useState("");
   const [isGeneratingPix, setIsGeneratingPix] = useState(false);
