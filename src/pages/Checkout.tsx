@@ -31,11 +31,22 @@ import {
 } from "lucide-react";
 
 const Checkout = () => {
+  const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
+  const navigate = useNavigate();
+  
   // Meta Pixel - Initiate Checkout
   useEffect(() => {
     if (window.fbq) {
       window.fbq('track', 'InitiateCheckout');
     }
+    
+    // Verifica se o usuário veio da página de acesso temporário
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 500);
+    
+    return () => clearTimeout(timer);
   }, []);
 
   const [urgencyTimer, setUrgencyTimer] = useState(15 * 60); // 15 minutos em segundos
@@ -48,9 +59,19 @@ const Checkout = () => {
     payment_id: string;
   } | null>(null);
   const [showPixModal, setShowPixModal] = useState(false);
-  const { toast } = useToast();
-  const navigate = useNavigate();
   const [verificationInterval, setVerificationInterval] = useState<NodeJS.Timeout | null>(null);
+  
+  // Mostrar tela de carregamento enquanto verifica
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-lg text-foreground">Carregando...</p>
+        </div>
+      </div>
+    );
+  }
 
   useEffect(() => {
     const timer = setInterval(() => {
