@@ -128,6 +128,37 @@ const Obrigado = () => {
     fetchPaymentData();
   }, [paymentId, navigate, toast]);
 
+  // Meta Pixel: init + Purchase
+  useEffect(() => {
+    // Se já existir, apenas inicializa/track
+    if (window.fbq) {
+      try {
+        window.fbq('init', '1544777363202622');
+        window.fbq('track', 'Purchase');
+      } catch {}
+      return;
+    }
+
+    (function (f: any, b: any, e: any, v: any, n?: any, t?: any, s?: any) {
+      if (f.fbq) return;
+      n = f.fbq = function () { (n as any).callMethod ? (n as any).callMethod.apply(n, arguments) : (n as any).queue.push(arguments) };
+      if (!f._fbq) f._fbq = n;
+      (n as any).push = (n as any);
+      (n as any).loaded = true;
+      (n as any).version = '2.0';
+      (n as any).queue = [];
+      t = b.createElement(e); t.async = true;
+      t.src = 'https://connect.facebook.net/en_US/fbevents.js';
+      s = b.getElementsByTagName(e)[0];
+      s.parentNode.insertBefore(t, s);
+    })(window as any, document as any, 'script', null);
+
+    try {
+      window.fbq('init', '1544777363202622');
+      window.fbq('track', 'Purchase');
+    } catch {}
+  }, []);
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -226,28 +257,7 @@ const Obrigado = () => {
                 </div>
                 <div className="ml-3">
                   <p className="text-sm text-gray-700">
-                    Enviamos os dados de acesso para <span className="font-medium">{paymentData.payer?.email}</span>.
-                    Verifique sua caixa de entrada e a pasta de spam.
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start">
-                <div className="flex-shrink-0">
-                  <CheckCircle2 className="h-5 w-5 text-green-500" />
-                </div>
-                <div className="ml-3">
-                  <p className="text-sm text-gray-700">
-                    O acesso ao curso é vitalício e você pode começar imediatamente após o recebimento dos dados.
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start">
-                <div className="flex-shrink-0">
-                  <CheckCircle2 className="h-5 w-5 text-green-500" />
-                </div>
-                <div className="ml-3">
-                  <p className="text-sm text-gray-700">
-                    Em caso de dúvidas, entre em contato pelo nosso suporte: suporte@seuprojeto.com
+                    Em caso de dúvidas, entre em contato pelo nosso suporte: (61) 98166-2814
                   </p>
                 </div>
               </div>
@@ -262,28 +272,14 @@ const Obrigado = () => {
             </div>
           </div>
         </div>
-
-        <div className="mt-8 pt-6 border-t border-gray-200">
-          <div className="space-y-2">
-            <p className="text-sm text-gray-600">
-              ✅ Acesso ilimitado a mais de 200 exercícios
-            </p>
-            <p className="text-sm text-gray-600">
-              ✅ Disponível 24/7 em qualquer dispositivo
-            </p>
-            <p className="text-sm text-gray-600">
-              ✅ Suporte via WhatsApp
-            </p>
-          </div>
-        </div>
       </div>
 
       <noscript>
-        <img 
-          height="1" 
-          width="1" 
-          style={{display: 'none'}}
-          src="https://www.facebook.com/tr?id=SEU_PIXEL_ID&ev=PageView&noscript=1"
+        <img
+          height="1"
+          width="1"
+          style={{ display: 'none' }}
+          src="https://www.facebook.com/tr?id=1544777363202622&ev=PageView&noscript=1"
           alt=""
         />
       </noscript>
