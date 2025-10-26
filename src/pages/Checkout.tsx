@@ -101,25 +101,46 @@ const Checkout = () => {
           description: "Escaneie o QR Code para realizar o pagamento",
         });
         
-        // Verificar status do pagamento a cada 5 segundos (em produção, usar webhook)
+        // Adiciona um listener para o evento de pagamento confirmado
+        const handlePaymentConfirmed = () => {
+          console.log('Pagamento confirmado, redirecionando...');
+          clearInterval(checkPaymentStatus);
+          navigate('/obrigado');
+        };
+
+        // Verificar status do pagamento a cada 5 segundos
         const checkPaymentStatus = setInterval(async () => {
           try {
+            console.log('Verificando status do pagamento...');
             const { data: statusData, error: statusError } = await supabase
               .from('payments')
-              .select('status')
+              .select('*')
               .eq('id', data.payment_id)
               .single();
 
-            if (statusError) throw statusError;
+            console.log('Dados do pagamento:', statusData);
+            
+            if (statusError) {
+              console.error('Erro ao buscar status:', statusError);
+              throw statusError;
+            }
 
-            if (statusData && statusData.status === 'paid') {
-              clearInterval(checkPaymentStatus);
-              navigate('/obrigado');
+            if (statusData) {
+              console.log('Status atual do pagamento:', statusData.status);
+              
+              // Verifica se o status é 'paid' ou 'approved' (depende do gateway de pagamento)
+              if (['paid', 'approved', 'pago', 'aprovado'].includes(statusData.status?.toLowerCase())) {
+                handlePaymentConfirmed();
+              }
             }
           } catch (error) {
             console.error('Erro ao verificar status do pagamento:', error);
+            // Se houver erro, tenta novamente em 5 segundos
           }
         }, 5000); // Verifica a cada 5 segundos
+        
+        // Para evitar vazamento de memória, limpa o intervalo quando o componente for desmontado
+        return () => clearInterval(checkPaymentStatus);
       } else {
         throw new Error(data.error || "Erro ao gerar PIX");
       }
