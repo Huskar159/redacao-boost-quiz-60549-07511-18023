@@ -5,7 +5,7 @@ const cors = require('cors');
 
 const app = express();
 const PORT = process.env.PORT || 8787;
-const MP_TOKEN = process.env.MP_ACCESS_TOKEN;
+const MP_TOKEN = process.env.MP_ACCESS_TOKEN || process.env.VITE_MERCADO_PAGO_ACCESS_TOKEN;
 
 app.use(cors());
 app.use(express.json());
