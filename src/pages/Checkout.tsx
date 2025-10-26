@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import mercadoPagoApi from "@/lib/mercadopago";
+import { supabase } from "@/lib/supabase";
 
 // Declaração de tipo para o Facebook Pixel
 declare global {
@@ -8,6 +9,7 @@ declare global {
     fbq: (event: string, eventName: string, params?: any) => void;
   }
 }
+
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -33,18 +35,18 @@ const Checkout = () => {
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
   const navigate = useNavigate();
-  
+
   // Meta Pixel - Initiate Checkout
   useEffect(() => {
     if (window.fbq) {
       window.fbq('track', 'InitiateCheckout');
     }
-    
+
     // Verifica se o usuário veio da página de acesso temporário
     const timer = setTimeout(() => {
       setIsLoading(false);
     }, 500);
-    
+
     return () => clearTimeout(timer);
   }, []);
 
@@ -59,7 +61,6 @@ const Checkout = () => {
   } | null>(null);
   const [showPixModal, setShowPixModal] = useState(false);
   const [verificationInterval, setVerificationInterval] = useState<NodeJS.Timeout | null>(null);
-  
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -85,12 +86,12 @@ const Checkout = () => {
   // Função para verificar o status do pagamento
   const checkPaymentStatus = useCallback(async (paymentId: string) => {
     if (!paymentId) return false;
-    
+
     try {
       setIsCheckingPayment(true);
       const response = await mercadoPagoApi.get(`/payments/${paymentId}`);
       const status = response.data.status;
-      
+
       if (status === 'approved' || status === 'authorized') {
         // Pagamento aprovado, redireciona para a página de obrigado
         if (verificationInterval) {
@@ -124,21 +125,21 @@ const Checkout = () => {
     if (verificationInterval) {
       clearInterval(verificationInterval);
     }
-    
+
     // Verifica imediatamente
     checkPaymentStatus(paymentId);
-    
+
     // Configura a verificação periódica a cada 5 segundos
     const interval = setInterval(() => {
       checkPaymentStatus(paymentId);
     }, 5000);
-    
+
     setVerificationInterval(interval);
-    
+
     // Retorna a função de limpeza
     return () => clearInterval(interval);
   }, [checkPaymentStatus, verificationInterval]);
-  
+
   // Limpa o intervalo quando o componente for desmontado
   useEffect(() => {
     return () => {
@@ -157,9 +158,9 @@ const Checkout = () => {
       });
       return;
     }
-    
+
     setIsGeneratingPix(true);
-    
+
     try {
       // Cria pagamento PIX diretamente na API do Mercado Pago
       const response = await mercadoPagoApi.post('/payments', {
@@ -188,19 +189,43 @@ const Checkout = () => {
         title: "PIX gerado com sucesso!",
         description: "Escaneie o QR Code para realizar o pagamento",
       });
-      
+
       // Armazena o ID do pagamento no localStorage
       localStorage.setItem('currentPaymentId', String(payment.id));
-      
+
       // Inicia a verificação do pagamento
       startPaymentVerification(String(payment.id));
     } catch (error: any) {
-      console.error("Erro ao gerar PIX:", error);
-      toast({
-        title: "Erro ao gerar PIX",
-        description: error?.response?.data?.message || error?.message || "Tente novamente mais tarde",
-        variant: "destructive",
-      });
+      console.error("Erro ao gerar PIX (API local). Tentando fallback Supabase...", error);
+      try {
+        const { data, error: fnError } = await supabase.functions.invoke('create-pix-payment', {
+          body: { email, amount: 19.90 },
+        });
+
+        if (fnError || !data?.payment_id || !data?.qr_code || !data?.qr_code_base64) {
+          throw fnError || new Error('Resposta inválida da Function');
+        }
+
+        setPixData({
+          qr_code: data.qr_code,
+          qr_code_base64: data.qr_code_base64,
+          payment_id: String(data.payment_id),
+        });
+        setShowPixModal(true);
+        toast({
+          title: "PIX gerado com sucesso!",
+          description: "Escaneie o QR Code para realizar o pagamento",
+        });
+        localStorage.setItem('currentPaymentId', String(data.payment_id));
+        startPaymentVerification(String(data.payment_id));
+      } catch (fallbackError: any) {
+        console.error("Fallback (Supabase) também falhou:", fallbackError);
+        toast({
+          title: "Erro ao gerar PIX",
+          description: fallbackError?.message || error?.response?.data?.message || error?.message || "Tente novamente mais tarde",
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsGeneratingPix(false);
     }
