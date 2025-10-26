@@ -101,10 +101,25 @@ const Checkout = () => {
           description: "Escaneie o QR Code para realizar o pagamento",
         });
         
-        // Simular confirmação de pagamento após 5 segundos (em produção, usar webhook)
-        setTimeout(() => {
-          navigate('/obrigado');
-        }, 5000);
+        // Verificar status do pagamento a cada 5 segundos (em produção, usar webhook)
+        const checkPaymentStatus = setInterval(async () => {
+          try {
+            const { data: statusData, error: statusError } = await supabase
+              .from('payments')
+              .select('status')
+              .eq('id', data.payment_id)
+              .single();
+
+            if (statusError) throw statusError;
+
+            if (statusData && statusData.status === 'paid') {
+              clearInterval(checkPaymentStatus);
+              navigate('/obrigado');
+            }
+          } catch (error) {
+            console.error('Erro ao verificar status do pagamento:', error);
+          }
+        }, 5000); // Verifica a cada 5 segundos
       } else {
         throw new Error(data.error || "Erro ao gerar PIX");
       }
