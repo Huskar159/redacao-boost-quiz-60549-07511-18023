@@ -62,7 +62,7 @@ const Obrigado = () => {
   };
 
   const handleAccessSite = () => {
-    window.location.href = 'https://seu-site.com/acesso';
+    window.location.href = 'https://aberto-pontuacao-mestre.vercel.app/pontuacao';
   };
 
   useEffect(() => {
