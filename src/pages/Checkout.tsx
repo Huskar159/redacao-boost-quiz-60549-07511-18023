@@ -1,10 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
+import mercadoPagoApi from "@/lib/mercadopago";
 
 // Declaração de tipo para o Facebook Pixel
 declare global {
   interface Window {
-    fbq: (event: string, eventName: string) => void;
+    fbq: (event: string, eventName: string, params?: any) => void;
   }
 }
 import { Card } from "@/components/ui/card";
@@ -40,6 +41,7 @@ const Checkout = () => {
   const [urgencyTimer, setUrgencyTimer] = useState(15 * 60); // 15 minutos em segundos
   const [email, setEmail] = useState("");
   const [isGeneratingPix, setIsGeneratingPix] = useState(false);
+  const [isCheckingPayment, setIsCheckingPayment] = useState(false);
   const [pixData, setPixData] = useState<{
     qr_code: string;
     qr_code_base64: string;
@@ -48,6 +50,7 @@ const Checkout = () => {
   const [showPixModal, setShowPixModal] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const [verificationInterval, setVerificationInterval] = useState<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -70,11 +73,77 @@ const Checkout = () => {
     }
   };
 
+  // Função para verificar o status do pagamento
+  const checkPaymentStatus = useCallback(async (paymentId: string) => {
+    if (!paymentId) return false;
+    
+    try {
+      setIsCheckingPayment(true);
+      const response = await mercadoPagoApi.get(`/payments/${paymentId}`);
+      const status = response.data.status;
+      
+      if (status === 'approved' || status === 'authorized') {
+        // Pagamento aprovado, redireciona para a página de obrigado
+        if (verificationInterval) {
+          clearInterval(verificationInterval);
+        }
+        navigate(`/obrigado?payment_id=${paymentId}`);
+        return true;
+      } else if (['pending', 'in_process', 'in_mediation'].includes(status)) {
+        // Pagamento ainda pendente, continua verificando
+        return false;
+      } else {
+        // Pagamento rejeitado ou com erro
+        toast({
+          title: "Pagamento não aprovado",
+          description: "O pagamento não pôde ser processado. Por favor, tente novamente.",
+          variant: "destructive",
+        });
+        return true; // Para parar de verificar
+      }
+    } catch (error) {
+      console.error('Erro ao verificar pagamento:', error);
+      return false;
+    } finally {
+      setIsCheckingPayment(false);
+    }
+  }, [navigate, toast, verificationInterval]);
+
+  // Função para iniciar a verificação periódica
+  const startPaymentVerification = useCallback((paymentId: string) => {
+    // Limpa qualquer verificação anterior
+    if (verificationInterval) {
+      clearInterval(verificationInterval);
+    }
+    
+    // Verifica imediatamente
+    checkPaymentStatus(paymentId);
+    
+    // Configura a verificação periódica a cada 5 segundos
+    const interval = setInterval(() => {
+      checkPaymentStatus(paymentId);
+    }, 5000);
+    
+    setVerificationInterval(interval);
+    
+    // Retorna a função de limpeza
+    return () => clearInterval(interval);
+  }, [checkPaymentStatus, verificationInterval]);
+  
+  // Limpa o intervalo quando o componente for desmontado
+  useEffect(() => {
+    return () => {
+      if (verificationInterval) {
+        clearInterval(verificationInterval);
+      }
+    };
+  }, [verificationInterval]);
+
   const handleGeneratePix = async () => {
     if (!email) {
       toast({
-        title: "Email obrigatório",
-        description: "Por favor, confirme seu email",
+        title: "Erro",
+        description: "Por favor, insira um e-mail válido.",
         variant: "destructive",
       });
       return;
@@ -104,44 +173,8 @@ const Checkout = () => {
         // Armazena o ID do pagamento no localStorage
         localStorage.setItem('currentPaymentId', data.payment_id);
         
-        // Adiciona um listener para o evento de pagamento confirmado
-        const handlePaymentConfirmed = () => {
-          console.log('Pagamento confirmado, redirecionando...');
-          clearInterval(checkPaymentStatus);
-          // Remove o ID do pagamento do localStorage
-          localStorage.removeItem('currentPaymentId');
-          // Redireciona para a página de obrigado com o ID do pagamento
-          navigate(`/obrigado?payment_id=${data.payment_id}`);
-        };
-
-        // Verificar status do pagamento a cada 5 segundos
-        const checkPaymentStatus = setInterval(() => {
-          try {
-            console.log('Verificando status do pagamento...');
-            
-            // Verifica se o status do pagamento foi atualizado no localStorage
-            const paymentStatus = localStorage.getItem(`payment_${data.payment_id}_status`);
-            
-            if (paymentStatus === 'approved') {
-              console.log('Pagamento aprovado!');
-              handlePaymentConfirmed();
-            } else if (paymentStatus === 'rejected') {
-              toast({
-                title: "Pagamento não aprovado",
-                description: "O pagamento não pôde ser processado. Por favor, tente novamente.",
-                variant: "destructive",
-              });
-              clearInterval(checkPaymentStatus);
-            } else {
-              console.log('Aguardando confirmação do pagamento...');
-            }
-          } catch (error) {
-            console.error('Erro ao verificar status do pagamento:', error);
-          }
-        }, 5000); // Verifica a cada 5 segundos
-        
-        // Para evitar vazamento de memória, limpa o intervalo quando o componente for desmontado
-        return () => clearInterval(checkPaymentStatus);
+        // Inicia a verificação do pagamento
+        startPaymentVerification(data.payment_id);
       } else {
         throw new Error(data.error || "Erro ao gerar PIX");
       }
@@ -578,37 +611,55 @@ const Checkout = () => {
       <Dialog open={showPixModal} onOpenChange={setShowPixModal}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>PIX Gerado com Sucesso!</DialogTitle>
+            <DialogTitle>Pagamento via PIX</DialogTitle>
             <DialogDescription>
-              Escaneie o QR Code ou copie o código PIX para realizar o pagamento
+              Escaneie o QR Code abaixo ou copie o código para efetuar o pagamento.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            {pixData?.qr_code_base64 && (
-              <div className="flex justify-center p-4 bg-white rounded-lg">
-                <img 
-                  src={`data:image/png;base64,${pixData.qr_code_base64}`} 
-                  alt="QR Code PIX"
-                  className="w-64 h-64"
-                />
+          <div className="flex flex-col items-center space-y-4">
+            <div className="p-4 bg-white rounded-lg border">
+              <img 
+                src={`data:image/png;base64,${pixData.qr_code_base64}`} 
+                alt="QR Code PIX"
+                className="w-64 h-64 mx-auto"
+              />
+            </div>
+            <div className="w-full">
+              <div className="flex items-center space-x-2 mb-2">
+                <span className="font-medium">Código PIX (copiar e colar):</span>
               </div>
-            )}
-            <div className="space-y-2">
-              <Label>Código PIX Copia e Cola</Label>
-              <div className="flex gap-2">
-                <Input 
-                  value={pixData?.qr_code || ''} 
-                  readOnly 
-                  className="font-mono text-xs"
+              <div className="flex items-center space-x-2">
+                <Input
+                  value={pixData.qr_code}
+                  readOnly
+                  className="flex-1 font-mono text-sm"
                 />
-                <Button onClick={copyPixCode} variant="outline">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    navigator.clipboard.writeText(pixData.qr_code);
+                    toast({
+                      title: "Código copiado!",
+                      description: "O código PIX foi copiado para a área de transferência.",
+                    });
+                  }}
+                >
                   Copiar
                 </Button>
               </div>
-            </div>
-            <div className="text-sm text-muted-foreground text-center">
-              <p>Valor: R$ 19,90</p>
-              <p className="mt-2">Após o pagamento, seu acesso será liberado automaticamente em segundos!</p>
+              
+              {/* Indicador de verificação de pagamento */}
+              {isCheckingPayment && (
+                <div className="mt-4 flex items-center justify-center text-blue-600">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600 mr-2"></div>
+                  <span>Verificando pagamento...</span>
+                </div>
+              )}
+              
+              <p className="mt-3 text-sm text-gray-500 text-center">
+                Após o pagamento, aguarde a confirmação automática.
+              </p>
             </div>
           </div>
         </DialogContent>
