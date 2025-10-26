@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import mercadoPagoApi from "@/lib/mercadopago";
-import { supabase } from "@/lib/supabase";
 
 // Declaração de tipo para o Facebook Pixel
 declare global {
@@ -111,7 +110,18 @@ const Checkout = () => {
         });
         return true; // Para parar de verificar
       }
-    } catch (error) {
+    } catch (error: any) {
+      // Se o backend não estiver disponível em produção (ex.: 404), para o polling
+      const status = error?.response?.status;
+      if (status === 404) {
+        if (verificationInterval) clearInterval(verificationInterval);
+        toast({
+          title: "Verificação indisponível",
+          description: "Backend de pagamentos não encontrado (404). Configure o BACKEND_URL em produção.",
+          variant: "destructive",
+        });
+        return true; // parar verificações
+      }
       console.error('Erro ao verificar pagamento:', error);
       return false;
     } finally {
@@ -196,33 +206,17 @@ const Checkout = () => {
       // Inicia a verificação do pagamento
       startPaymentVerification(String(payment.id));
     } catch (error: any) {
-      console.error("Erro ao gerar PIX (API local). Tentando fallback Supabase...", error);
-      try {
-        const { data, error: fnError } = await supabase.functions.invoke('create-pix-payment', {
-          body: { email, amount: 19.90 },
-        });
-
-        if (fnError || !data?.payment_id || !data?.qr_code || !data?.qr_code_base64) {
-          throw fnError || new Error('Resposta inválida da Function');
-        }
-
-        setPixData({
-          qr_code: data.qr_code,
-          qr_code_base64: data.qr_code_base64,
-          payment_id: String(data.payment_id),
-        });
-        setShowPixModal(true);
+      const status = error?.response?.status;
+      if (status === 404) {
         toast({
-          title: "PIX gerado com sucesso!",
-          description: "Escaneie o QR Code para realizar o pagamento",
+          title: "Backend indisponível",
+          description: "Não foi possível acessar /api/mp/payments (404). Configure VITE_BACKEND_URL em produção.",
+          variant: "destructive",
         });
-        localStorage.setItem('currentPaymentId', String(data.payment_id));
-        startPaymentVerification(String(data.payment_id));
-      } catch (fallbackError: any) {
-        console.error("Fallback (Supabase) também falhou:", fallbackError);
+      } else {
         toast({
           title: "Erro ao gerar PIX",
-          description: fallbackError?.message || error?.response?.data?.message || error?.message || "Tente novamente mais tarde",
+          description: error?.response?.data?.message || error?.message || "Tente novamente mais tarde",
           variant: "destructive",
         });
       }
