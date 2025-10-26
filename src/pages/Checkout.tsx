@@ -624,7 +624,7 @@ const Checkout = () => {
       </main>
 
       {/* Modal do PIX */}
-      <Dialog open={showPixModal} onOpenChange={setShowPixModal}>
+      <Dialog open={showPixModal && !!pixData} onOpenChange={setShowPixModal}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Pagamento via PIX</DialogTitle>
@@ -633,50 +633,61 @@ const Checkout = () => {
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col items-center space-y-4">
-            <div className="p-4 bg-white rounded-lg border">
-              <img 
-                src={`data:image/png;base64,${pixData.qr_code_base64}`} 
-                alt="QR Code PIX"
-                className="w-64 h-64 mx-auto"
-              />
-            </div>
-            <div className="w-full">
-              <div className="flex items-center space-x-2 mb-2">
-                <span className="font-medium">Código PIX (copiar e colar):</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Input
-                  value={pixData.qr_code}
-                  readOnly
-                  className="flex-1 font-mono text-sm"
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    navigator.clipboard.writeText(pixData.qr_code);
-                    toast({
-                      title: "Código copiado!",
-                      description: "O código PIX foi copiado para a área de transferência.",
-                    });
-                  }}
-                >
-                  Copiar
-                </Button>
-              </div>
-              
-              {/* Indicador de verificação de pagamento */}
-              {isCheckingPayment && (
-                <div className="mt-4 flex items-center justify-center text-blue-600">
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600 mr-2"></div>
-                  <span>Verificando pagamento...</span>
+            {pixData && pixData.qr_code_base64 && pixData.qr_code ? (
+              <>
+                <div className="p-4 bg-white rounded-lg border">
+                  <img 
+                    src={`data:image/png;base64,${pixData?.qr_code_base64 ?? ""}`}
+                    alt="QR Code PIX"
+                    className="w-64 h-64 mx-auto"
+                  />
                 </div>
-              )}
-              
-              <p className="mt-3 text-sm text-gray-500 text-center">
-                Após o pagamento, aguarde a confirmação automática.
-              </p>
-            </div>
+                <div className="w-full">
+                  <div className="flex items-center space-x-2 mb-2">
+                    <span className="font-medium">Código PIX (copiar e colar):</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Input
+                      value={pixData?.qr_code ?? ""}
+                      readOnly
+                      className="flex-1 font-mono text-sm"
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (pixData?.qr_code) {
+                          navigator.clipboard.writeText(pixData.qr_code);
+                          toast({
+                            title: "Código copiado!",
+                            description: "O código PIX foi copiado para a área de transferência.",
+                          });
+                        }
+                      }}
+                    >
+                      Copiar
+                    </Button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="w-full py-8 text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-3"></div>
+                <p className="text-sm text-muted-foreground">Gerando PIX...</p>
+              </div>
+            )}
+
+            {/* Indicador de verificação de pagamento */}
+            {isCheckingPayment && (
+              <div className="mt-2 flex items-center justify-center text-blue-600">
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600 mr-2"></div>
+                <span>Verificando pagamento...</span>
+              </div>
+            )}
+            
+            <p className="mt-3 text-sm text-gray-500 text-center">
+              Após o pagamento, aguarde a confirmação automática.
+            </p>
           </div>
         </DialogContent>
       </Dialog>
