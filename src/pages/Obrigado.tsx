@@ -1,7 +1,9 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { CheckCircle2, ArrowRight } from "lucide-react";
+import { useSearchParams, useNavigate } from "react-router-dom";
+import { useToast } from "@/hooks/use-toast";
 
 // Declaração de tipo para o Facebook Pixel
 declare global {
@@ -12,6 +14,68 @@ declare global {
 }
 
 const Obrigado = () => {
+  const [searchParams] = useSearchParams();
+  const { toast } = useToast();
+  const paymentId = searchParams.get('payment_id');
+
+  const navigate = useNavigate();
+  const [isPaymentConfirmed, setIsPaymentConfirmed] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const checkPaymentStatus = () => {
+      if (!paymentId) {
+        const currentPaymentId = localStorage.getItem('currentPaymentId');
+        if (currentPaymentId) {
+          // Se houver um pagamento ativo, redireciona com o ID
+          window.location.href = `/obrigado?payment_id=${currentPaymentId}`;
+          return;
+        } else {
+          // Se não houver payment_id e nem pagamento ativo, redireciona para a página inicial
+          toast({
+            title: "Pagamento não encontrado",
+            description: "Não foi possível encontrar informações do seu pagamento.",
+            variant: "destructive",
+          });
+          setTimeout(() => {
+            window.location.href = '/';
+          }, 3000);
+          return;
+        }
+      }
+
+      // Verifica o status do pagamento no localStorage
+      const paymentStatus = localStorage.getItem(`payment_${paymentId}_status`);
+      
+      if (paymentStatus === 'approved') {
+        // Pagamento confirmado
+        setIsPaymentConfirmed(true);
+        localStorage.removeItem('currentPaymentId');
+        
+        // Dispara o evento de compra do Meta Pixel
+        if (window.fbq) {
+          // Envia o evento de compra sem parâmetros adicionais
+          window.fbq('track', 'Purchase');
+        }
+      } else {
+        // Se o pagamento não estiver confirmado, tenta novamente em 5 segundos
+        toast({
+          title: "Aguardando confirmação",
+          description: "Aguardando confirmação do pagamento. Isso pode levar alguns instantes...",
+        });
+        
+        const timer = setTimeout(() => {
+          window.location.href = `/obrigado?payment_id=${paymentId}`;
+        }, 5000);
+        
+        return () => clearTimeout(timer);
+      }
+      
+      setIsLoading(false);
+    };
+
+    checkPaymentStatus();
+  }, [paymentId, toast]);
   // Meta Pixel - Purchase Event
   useEffect(() => {
     // Inicializa o pixel se ainda não estiver inicializado

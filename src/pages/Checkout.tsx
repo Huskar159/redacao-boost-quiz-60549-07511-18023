@@ -101,41 +101,42 @@ const Checkout = () => {
           description: "Escaneie o QR Code para realizar o pagamento",
         });
         
+        // Armazena o ID do pagamento no localStorage
+        localStorage.setItem('currentPaymentId', data.payment_id);
+        
         // Adiciona um listener para o evento de pagamento confirmado
         const handlePaymentConfirmed = () => {
           console.log('Pagamento confirmado, redirecionando...');
           clearInterval(checkPaymentStatus);
-          navigate('/obrigado');
+          // Remove o ID do pagamento do localStorage
+          localStorage.removeItem('currentPaymentId');
+          // Redireciona para a página de obrigado com o ID do pagamento
+          navigate(`/obrigado?payment_id=${data.payment_id}`);
         };
 
         // Verificar status do pagamento a cada 5 segundos
-        const checkPaymentStatus = setInterval(async () => {
+        const checkPaymentStatus = setInterval(() => {
           try {
             console.log('Verificando status do pagamento...');
-            const { data: statusData, error: statusError } = await supabase
-              .from('payments')
-              .select('*')
-              .eq('id', data.payment_id)
-              .single();
-
-            console.log('Dados do pagamento:', statusData);
             
-            if (statusError) {
-              console.error('Erro ao buscar status:', statusError);
-              throw statusError;
-            }
-
-            if (statusData) {
-              console.log('Status atual do pagamento:', statusData.status);
-              
-              // Verifica se o status é 'paid' ou 'approved' (depende do gateway de pagamento)
-              if (['paid', 'approved', 'pago', 'aprovado'].includes(statusData.status?.toLowerCase())) {
-                handlePaymentConfirmed();
-              }
+            // Verifica se o status do pagamento foi atualizado no localStorage
+            const paymentStatus = localStorage.getItem(`payment_${data.payment_id}_status`);
+            
+            if (paymentStatus === 'approved') {
+              console.log('Pagamento aprovado!');
+              handlePaymentConfirmed();
+            } else if (paymentStatus === 'rejected') {
+              toast({
+                title: "Pagamento não aprovado",
+                description: "O pagamento não pôde ser processado. Por favor, tente novamente.",
+                variant: "destructive",
+              });
+              clearInterval(checkPaymentStatus);
+            } else {
+              console.log('Aguardando confirmação do pagamento...');
             }
           } catch (error) {
             console.error('Erro ao verificar status do pagamento:', error);
-            // Se houver erro, tenta novamente em 5 segundos
           }
         }, 5000); // Verifica a cada 5 segundos
         
